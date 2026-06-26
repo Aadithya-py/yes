@@ -1,2 +1,306 @@
-# yes
-for food
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Chess Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      background: #f5f5f5;
+      color: #222;
+    }
+    h1 {
+      margin: 24px 0 8px;
+    }
+    #game {
+      display: grid;
+      gap: 16px;
+      width: 100%;
+      max-width: 520px;
+      padding: 16px;
+      box-sizing: border-box;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 56px);
+      grid-template-rows: repeat(8, 56px);
+      border: 2px solid #444;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .square {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    .light { background: #f0d9b5; }
+    .dark { background: #b58863; }
+    .square:hover { filter: brightness(1.08); }
+    #controls {
+      display: grid;
+      gap: 12px;
+    }
+    label, input, button, p {
+      margin: 0;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 12px;
+      font-size: 16px;
+      background: #2e7d32;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #256625; }
+    #status {
+      padding: 12px 14px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+    }
+    #legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    #legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Simple Chess Game</h1>
+  <div id="game">
+    <div id="board"></div>
+    <div id="controls">
+      <div id="status">White to move</div>
+      <label for="moveInput">Enter move (e.g. e2e4)</label>
+      <input id="moveInput" type="text" placeholder="e2e4" maxlength="5" autocomplete="off" />
+      <button id="moveButton">Make Move</button>
+      <div id="legend">
+        <span>♙ White Pawn</span>
+        <span>♟ Black Pawn</span>
+        <span>♖ White Rook</span>
+        <span>♜ Black Rook</span>
+        <span>♘ White Knight</span>
+        <span>♞ Black Knight</span>
+        <span>♗ White Bishop</span>
+        <span>♝ Black Bishop</span>
+        <span>♕ White Queen</span>
+        <span>♛ Black Queen</span>
+        <span>♔ White King</span>
+        <span>♚ Black King</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const pieceMap = {
+      'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
+      'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+      '.': ''
+    };
+
+    let board = [
+      ['r','n','b','q','k','b','n','r'],
+      ['p','p','p','p','p','p','p','p'],
+      ['.','.','.','.','.','.','.','.'],
+      ['.','.','.','.','.','.','.','.'],
+      ['.','.','.','.','.','.','.','.'],
+      ['.','.','.','.','.','.','.','.'],
+      ['P','P','P','P','P','P','P','P'],
+      ['R','N','B','Q','K','B','N','R']
+    ];
+
+    let whiteTurn = true;
+    const boardElement = document.getElementById('board');
+    const statusElement = document.getElementById('status');
+    const moveInput = document.getElementById('moveInput');
+    const moveButton = document.getElementById('moveButton');
+
+    function drawBoard() {
+      boardElement.innerHTML = '';
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const square = document.createElement('div');
+          square.className = 'square ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+          square.textContent = pieceMap[board[row][col]];
+          square.dataset.coord = String.fromCharCode(97 + col) + (8 - row);
+          boardElement.appendChild(square);
+        }
+      }
+    }
+
+    function parseMove(text) {
+      const normalized = text.trim().toLowerCase();
+      if (!/^[a-h][1-8][a-h][1-8]$/.test(normalized)) {
+        return null;
+      }
+      const fromFile = normalized.charCodeAt(0) - 97;
+      const fromRank = 8 - Number(normalized[1]);
+      const toFile = normalized.charCodeAt(2) - 97;
+      const toRank = 8 - Number(normalized[3]);
+      return { from: [fromRank, fromFile], to: [toRank, toFile] };
+    }
+
+    function onBoard(r, c) {
+      return r >= 0 && r < 8 && c >= 0 && c < 8;
+    }
+
+    function sameColor(piece1, piece2) {
+      if (piece1 === '.' || piece2 === '.') return false;
+      return piece1.toUpperCase() === piece1 && piece2.toUpperCase() === piece2 ||
+             piece1.toLowerCase() === piece1 && piece2.toLowerCase() === piece2;
+    }
+
+    function validMove(src, dst, playerWhite) {
+      const [r1, c1] = src;
+      const [r2, c2] = dst;
+      const piece = board[r1][c1];
+      const target = board[r2][c2];
+      if (piece === '.' || (piece === piece.toUpperCase()) !== playerWhite) return false;
+      if (sameColor(piece, target)) return false;
+      const dr = r2 - r1;
+      const dc = c2 - c1;
+      const p = piece.toUpperCase();
+
+      function isClearPath(stepR, stepC) {
+        const distance = Math.max(Math.abs(dr), Math.abs(dc));
+        for (let i = 1; i < distance; i++) {
+          const rr = r1 + stepR * i;
+          const cc = c1 + stepC * i;
+          if (board[rr][cc] !== '.') return false;
+        }
+        return true;
+      }
+
+      if (p === 'P') {
+        const direction = piece === piece.toUpperCase() ? -1 : 1;
+        const startRow = piece === piece.toUpperCase() ? 6 : 1;
+        if (dc === 0) {
+          if (dr === direction && target === '.') return true;
+          if (r1 === startRow && dr === 2 * direction && target === '.' && board[r1 + direction][c1] === '.') return true;
+          return false;
+        }
+        if (Math.abs(dc) === 1 && dr === direction && target !== '.' && !sameColor(piece, target)) return true;
+        return false;
+      }
+
+      if (p === 'N') {
+        return (Math.abs(dr) === 2 && Math.abs(dc) === 1) || (Math.abs(dr) === 1 && Math.abs(dc) === 2);
+      }
+      if (p === 'B') {
+        if (Math.abs(dr) !== Math.abs(dc)) return false;
+        return isClearPath(Math.sign(dr), Math.sign(dc));
+      }
+      if (p === 'R') {
+        if (dr !== 0 && dc !== 0) return false;
+        return isClearPath(Math.sign(dr), Math.sign(dc));
+      }
+      if (p === 'Q') {
+        if (dr === 0 && dc === 0) return false;
+        if (dr === 0 || dc === 0) return isClearPath(Math.sign(dr), Math.sign(dc));
+        if (Math.abs(dr) === Math.abs(dc)) return isClearPath(Math.sign(dr), Math.sign(dc));
+        return false;
+      }
+      if (p === 'K') {
+        return Math.max(Math.abs(dr), Math.abs(dc)) === 1;
+      }
+      return false;
+    }
+
+    function movePiece(src, dst) {
+      const [r1, c1] = src;
+      const [r2, c2] = dst;
+      board[r2][c2] = board[r1][c1];
+      board[r1][c1] = '.';
+    }
+
+    function findKing(playerWhite) {
+      const king = playerWhite ? 'K' : 'k';
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (board[r][c] === king) return [r, c];
+        }
+      }
+      return null;
+    }
+
+    function isCheck(playerWhite) {
+      const kingPos = findKing(playerWhite);
+      if (!kingPos) return true;
+      const [kr, kc] = kingPos;
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r][c];
+          if (piece !== '.' && (piece === piece.toUpperCase()) === playerWhite) continue;
+          if (piece !== '.' && validMove([r, c], [kr, kc], !playerWhite)) return true;
+        }
+      }
+      return false;
+    }
+
+    function applyMove() {
+      const parsed = parseMove(moveInput.value);
+      if (!parsed) {
+        statusElement.textContent = 'Invalid input. Use format e2e4.';
+        return;
+      }
+      if (!validMove(parsed.from, parsed.to, whiteTurn)) {
+        statusElement.textContent = 'Illegal move.';
+        return;
+      }
+      const savedFrom = board[parsed.from[0]][parsed.from[1]];
+      const savedTo = board[parsed.to[0]][parsed.to[1]];
+      movePiece(parsed.from, parsed.to);
+      if (isCheck(whiteTurn)) {
+        board[parsed.from[0]][parsed.from[1]] = savedFrom;
+        board[parsed.to[0]][parsed.to[1]] = savedTo;
+        statusElement.textContent = 'Move leaves king in check.';
+        return;
+      }
+      whiteTurn = !whiteTurn;
+      const checkStatus = isCheck(!whiteTurn) ? ' Check!' : '';
+      statusElement.textContent = (whiteTurn ? 'White' : 'Black') + ' to move.' + checkStatus;
+      drawBoard();
+      moveInput.value = '';
+      moveInput.focus();
+    }
+
+    moveButton.addEventListener('click', applyMove);
+    moveInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') applyMove();
+    });
+
+    drawBoard();
+    moveInput.focus();
+  </script>
+</body>
+</html>
